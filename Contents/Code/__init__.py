@@ -8,8 +8,8 @@ SHOWS = 'http://www.logotv.com/shows/'
 VIDEOS = 'http://www.logotv.com/video/showall.jhtml'
 SEARCH_URL = 'http://www.logotv.com/search/video/'
 
-RE_SEASON  = Regex('.+Season (\d{1,2}).+')
-RE_EP_AND_SEASON  = Regex('.+Episode (\d{1,3}), Season (\d{1,2}).+')
+RE_EPISODE  = Regex('Episode (\d{1,3}).+')
+RE_EP_AND_SEASON  = Regex('Episode (\d{1,3}), Season (\d{1,2}).+')
 ####################################################################################################
 # Set up containers for all possible objects
 def Start():
@@ -49,6 +49,7 @@ def LogoShows(title):
   return oc
 #####################################################################################
 # For Logo main sections of Videos
+# Considered adding a menus for all videeos at bottom of video page, but only shows one video per show
 @route(PREFIX + '/logovideos')
 def LogoVideos(title):
   oc = ObjectContainer(title2=title)
@@ -58,7 +59,7 @@ def LogoVideos(title):
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Previews and Bonus Clips', show_type='extras', url=VIDEOS), title='Previews and Bonus Clips')) 
   return oc
 #####################################################################################
-# For Producing All Shows 
+# For Producing All Shows list at bottom of show page
 @route(PREFIX + '/produceshows')
 def ProduceShows(title):
   oc = ObjectContainer(title2=title)
@@ -70,11 +71,11 @@ def ProduceShows(title):
       url = BASE_URL + url
     # One series is hosted at another site so have to tell it to not include this series
     else:
-      if not vid_url.startswith('http://www.logotv.com'):
+      if not url.startswith('http://www.logotv.com'):
         continue
     title = video.xpath('.//text()')[0]
     # USED THE OPTION OF ADDING THEM AS CALLBACKS TO DIRECTORYOBJECTS PER MIKE'S SUGGESTION
-    oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=url), title = title, thumb = Callback(GetThumb, url=url, fallback=R(ICON))))
+    oc.add(DirectoryObject(key=Callback(ShowVideosType, title=title, url=url), title = title, thumb = Callback(GetThumb, url=url, fallback=R(ICON))))
 
   oc.objects.sort(key = lambda obj: obj.title)
 
@@ -84,7 +85,7 @@ def ProduceShows(title):
   else:
     return oc
 #########################################################################################
-# This will produce the carousels for logo main show and main video pages
+# This will produce the carousels for logo shows page and the video page
 # the choices for videos are full-episodes, full-movies, other-series and extras for logo
 # the choices for shows are original-series, movies-series, other-series and comedy-speicials for logo
 @route(PREFIX + '/morevideos')
@@ -108,7 +109,7 @@ def MoreVideos(title, url, show_type):
     if not thumb.startswith('http://'):
       thumb = BASE_URL + thumb
     if 'series' in vid_url:
-      oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=vid_url), title = title, thumb = thumb))
+      oc.add(DirectoryObject(key=Callback(ShowVideosType, title=title, url=vid_url), title = title, thumb = thumb))
     else:
       date = Datetime.ParseDate(video.xpath('./a/div[@class="addedDate"]//text()')[0])
       oc.add(VideoClipObject(
@@ -122,11 +123,23 @@ def MoreVideos(title, url, show_type):
     return ObjectContainer(header="Empty", message="There are no videos to list right now.")
   else:
     return oc
+#####################################################################################
+# For Logo full and other sections of Videos
+@route(PREFIX + '/showvideostype')
+def ShowVideosType(title, url):
+  oc = ObjectContainer(title2=title)
+  if '_docs' in url or '_movie' in url or 'documentaries' in url:
+    full_title='Full Movies'
+  else:
+    full_title='Full Episodes'
+  oc.add(DirectoryObject(key=Callback(ShowVideos, title=full_title, content_type='Full Episode', url=url), title=full_title)) 
+  oc.add(DirectoryObject(key=Callback(ShowVideos, title='Other Videos', content_type='Other', url=url), title='Other Videos')) 
+  return oc
 #################################################################################################################
 # This function produces videos from the table layout used by show video pages
 # This function picks up all videos in all pages even without paging code
 @route(PREFIX + '/showvideos')
-def ShowVideos(title, url):
+def ShowVideos(title, url, content_type):
   oc = ObjectContainer(title2=title)
   data = HTML.ElementFromURL(url)
   for video in data.xpath('//ol/li[@itemtype="http://schema.org/VideoObject"]'):
@@ -139,10 +152,10 @@ def ShowVideos(title, url):
     title = video.xpath('./meta[@itemprop="name"]//@content')[0]
     if not title:
       title = other_info
-    thumb = video.xpath('./meta[@itemprop="thumbnail"]//@content')[0]
+    thumb = video.xpath('./meta[@itemprop="thumbnail"]//@content')[0].split('?')[0]
     if not thumb.startswith('http://'):
       thumb = BASE_URL + thumb
-    thumb = thumb.split('?')[0]
+    #thumb = thumb.split('?')[0]
     vid_url = video.xpath('./meta[@itemprop="url"]//@content')[0]
     if not vid_url.startswith('http://'):
       vid_url = BASE_URL + vid_url
@@ -155,35 +168,41 @@ def ShowVideos(title, url):
         date = ''
     else:
       date = Datetime.ParseDate(date)
+    content = video.xpath('./ul/li[@class="list-ct"]//text()')[0]
+    if content == 'Full Movies':
+      content = 'Full Episode'
+    if content != 'Full Episode':
+      content = 'Other'
     if '_docs' in url or '_movie' in url or 'documentaries' in url:
-      # if movie or doc in url, no season or episode number, so create a movie object
-      oc.add(MovieObject(url = vid_url, title = title, thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
-        originally_available_at = date, summary = desc))
+      if content_type == content:
+        # if movie or doc in url, no season or episode number, so create a movie object
+        oc.add(MovieObject(url = vid_url, title = title, thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
+          originally_available_at = date, summary = desc))
     else:
       try:
-        seas_and_ep = RE_EPISODE.findall(other_info)
-        episode = int(seas_and_ep[0])
-        season = int(seas_and_ep[1])
+        episode = int(RE_EP_AND_SEASON.search(other_info).group(1))
+        season = int(RE_EP_AND_SEASON.search(other_info).group(2))
       except:
-        # if no episode through above, most likely no episode in list-ep so episode would be zero but season may be in url or in title
-        episode = 0
+        # if no episode through above, no episode in list-ep so look for them with alternate regex for season and episode in title or season in url
         if '/season_' in url:
           season = int(url.split('/season_')[1].replace('/series.jhtml',''))
         else:
-          try:
-            season = int(RE_SEASON.search(other_info).group(1))
-          except:
-            season = 1
+          season = 1
+        try:
+          episode = int(RE_EPISODE.search(other_info).group(1))
+        except:
+          episode = 0
 
-      oc.add(EpisodeObject(
-        url = vid_url, 
-        season = season,
-        index = episode,
-        title = title, 
-        thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
-        originally_available_at = date,
-        summary = desc
-      ))
+      if content_type == content:
+        oc.add(EpisodeObject(
+          url = vid_url, 
+          season = season,
+          index = episode,
+          title = title, 
+          thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
+          originally_available_at = date,
+          summary = desc
+        ))
   #oc.objects.sort(key = lambda obj: obj.originally_available_at, reverse=True)
 
   if len(oc) < 1:
@@ -203,8 +222,6 @@ def SearchVideos(title, query='', page_url=''):
   data = HTML.ElementFromURL(local_url)
   for item in data.xpath('//ul/li[contains(@class,"mtvn-video ")]'):
     link = item.xpath('./div/a//@href')[0]
-    if 'mtviggy' in link:
-      continue
     if not link.startswith('http://'):
       link = BASE_URL + link
     image = item.xpath('./div/a/span/img//@src')[0]
