@@ -8,9 +8,8 @@ SHOWS = 'http://www.logotv.com/shows/'
 VIDEOS = 'http://www.logotv.com/video/showall.jhtml'
 SEARCH_URL = 'http://www.logotv.com/search/video/'
 
-RE_EPISODE  = Regex('.+Ep. (\d{1,3})')
-RE_EPISODE_ALSO  = Regex('.+Episode (\d{1,3})')
-#RE_EP_AND_SEASON  = Regex('.+Episode (\d{1,3}), Season (\d{1,2}).+')
+RE_SEASON  = Regex('.+Season (\d{1,2}).+')
+RE_EP_AND_SEASON  = Regex('.+Episode (\d{1,3}), Season (\d{1,2}).+')
 ####################################################################################################
 # Set up containers for all possible objects
 def Start():
@@ -25,6 +24,7 @@ def Start():
   VideoClipObject.thumb = R(ICON)
   VideoClipObject.art = R(ART)
 
+  # Since all functions would use a pull cache of one hour, just extablishing that here instead
   #HTTP.CacheTime = CACHE_1HOUR 
  
 #####################################################################################
@@ -41,10 +41,10 @@ def MainMenu():
 @route(PREFIX + '/logoshows')
 def LogoShows(title):
   oc = ObjectContainer(title2=title)
-  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Original Shows', show_type='original-series', url=SHOWS), title='Original Shows')) 
+  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Original Series', show_type='original-series', url=SHOWS), title='Original Series')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Movies', show_type='movies-series', url=SHOWS), title='Movies')) 
-  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Other Shows', show_type='other-series', url=SHOWS), title='Other Shows')) 
-  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Comedy Shows and Special Shows', show_type='comedy-specials', url=SHOWS), title='Comedy Shows and Specials')) 
+  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Other Series', show_type='other-series', url=SHOWS), title='Other Series')) 
+  oc.add(DirectoryObject(key=Callback(MoreVideos, title='Comedy and Specials', show_type='comedy-specials', url=SHOWS), title='Comedy and Specials')) 
   oc.add(DirectoryObject(key=Callback(ProduceShows, title='All Logo Shows'), title='All Logo Shows')) 
   return oc
 #####################################################################################
@@ -62,22 +62,19 @@ def LogoVideos(title):
 @route(PREFIX + '/produceshows')
 def ProduceShows(title):
   oc = ObjectContainer(title2=title)
-  #THIS DATA PULL IS ALSO USED FOR SHOW SECTIONS
+  #THIS DATA PULL IS ALSO USED FOR SHOWS IN THE MORE VIDEOS FUNCTION
   data = HTML.ElementFromURL(SHOWS)
-  #data = HTML.ElementFromURL(url, cacheTime = CACHE_1HOUR)
   for video in data.xpath('//div[@class="a_to_z_item"]/a'):
     url = video.xpath('.//@href')[0]
     if not url.startswith('http://'):
       url = BASE_URL + url
-    title = video.xpath('.//text()')[0]
-    if '/season_' in url:
-      season = url.split('/season_')[1]
-      season = season.split('/')[0]
+    # One series is hosted at another site so have to tell it to not include this series
     else:
-      season = 1
+      if not vid_url.startswith('http://www.logotv.com'):
+        continue
+    title = video.xpath('.//text()')[0]
     # USED THE OPTION OF ADDING THEM AS CALLBACKS TO DIRECTORYOBJECTS PER MIKE'S SUGGESTION
-    # USED THE OPTION OF ADDING THEM AS CALLBACKS TO DIRECTORYOBJECTS PER MIKE'S SUGGESTION
-    oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=url, season=int(season)), title = title, thumb = Callback(GetThumb, url=url, fallback=R(ICON))))
+    oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=url), title = title, thumb = Callback(GetThumb, url=url, fallback=R(ICON))))
 
   oc.objects.sort(key = lambda obj: obj.title)
 
@@ -93,8 +90,8 @@ def ProduceShows(title):
 @route(PREFIX + '/morevideos')
 def MoreVideos(title, url, show_type):
   oc = ObjectContainer(title2=title)
-  #data = HTML.ElementFromURL(url)
-  data = HTML.ElementFromURL(url, cacheTime=CACHE_1DAY)
+  #THIS DATA PULL IS ALSO USED FOR SHOWS IN THE PRODUCESHOWS FUNCTION
+  data = HTML.ElementFromURL(url)
   for video in data.xpath('//div[@id="carousel-%s"]/div[@class="itemContent"]' %show_type):
     vid_url = video.xpath('./a//@href')[0]
     if not vid_url.startswith('http://'):
@@ -102,6 +99,7 @@ def MoreVideos(title, url, show_type):
         vid_url = BASE_URL + vid_url
       else:
         vid_url = 'http://' + vid_url
+    # One series is hosted at another site so have to tell it to not include this series
     else:
       if not vid_url.startswith('http://www.logotv.com'):
         continue
@@ -109,14 +107,8 @@ def MoreVideos(title, url, show_type):
     thumb = video.xpath('./a/div[@class="image"]/img//@src')[0].split('?')[0]
     if not thumb.startswith('http://'):
       thumb = BASE_URL + thumb
-    Log('the value of vid_url is %s' %vid_url)
     if 'series' in vid_url:
-      if '/season_' in vid_url:
-        season = vid_url.split('/season_')[1]
-        season = season.split('/')[0]
-      else:
-        season = 1
-      oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=vid_url, season=int(season)), title = title, thumb = thumb))
+      oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=vid_url), title = title, thumb = thumb))
     else:
       date = Datetime.ParseDate(video.xpath('./a/div[@class="addedDate"]//text()')[0])
       oc.add(VideoClipObject(
@@ -131,14 +123,12 @@ def MoreVideos(title, url, show_type):
   else:
     return oc
 #################################################################################################################
-# This function produces videos from the table layout used by show video pages for all three networks
+# This function produces videos from the table layout used by show video pages
 # This function picks up all videos in all pages even without paging code
-# IT PRODUCES VIDEOS EXACTLY HOW THE SITE DOES SO JERSEY SHORE SEASON 5 AND 6 SHOW ALL SEASONEPISODES
-@route(PREFIX + '/showvideos', season=int)
-def ShowVideos(title, url, season):
+@route(PREFIX + '/showvideos')
+def ShowVideos(title, url):
   oc = ObjectContainer(title2=title)
-  local_url = url
-  data = HTML.ElementFromURL(local_url)
+  data = HTML.ElementFromURL(url)
   for video in data.xpath('//ol/li[@itemtype="http://schema.org/VideoObject"]'):
     # Logo has extra section of same videos that are picked up so put it in a try
     try:
@@ -146,11 +136,6 @@ def ShowVideos(title, url, season):
     except:
       continue
     other_info = video.xpath('.//@maintitle')[0]
-    episode = video.xpath('./ul/li[@class="list-ep"]//text()')[0]
-    if episode == '--' or episode == 'Special':
-      episode = EpisodeFind(other_info)
-    else:
-      episode = int(episode)
     title = video.xpath('./meta[@itemprop="name"]//@content')[0]
     if not title:
       title = other_info
@@ -170,16 +155,35 @@ def ShowVideos(title, url, season):
         date = ''
     else:
       date = Datetime.ParseDate(date)
+    if '_docs' in url or '_movie' in url or 'documentaries' in url:
+      # if movie or doc in url, no season or episode number, so create a movie object
+      oc.add(MovieObject(url = vid_url, title = title, thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
+        originally_available_at = date, summary = desc))
+    else:
+      try:
+        seas_and_ep = RE_EPISODE.findall(other_info)
+        episode = int(seas_and_ep[0])
+        season = int(seas_and_ep[1])
+      except:
+        # if no episode through above, most likely no episode in list-ep so episode would be zero but season may be in url or in title
+        episode = 0
+        if '/season_' in url:
+          season = int(url.split('/season_')[1].replace('/series.jhtml',''))
+        else:
+          try:
+            season = int(RE_SEASON.search(other_info).group(1))
+          except:
+            season = 1
 
-    oc.add(EpisodeObject(
-      url = vid_url, 
-      season = season,
-      index = episode,
-      title = title, 
-      thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
-      originally_available_at = date,
-      summary = desc
-    ))
+      oc.add(EpisodeObject(
+        url = vid_url, 
+        season = season,
+        index = episode,
+        title = title, 
+        thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
+        originally_available_at = date,
+        summary = desc
+      ))
   #oc.objects.sort(key = lambda obj: obj.originally_available_at, reverse=True)
 
   if len(oc) < 1:
@@ -188,8 +192,7 @@ def ShowVideos(title, url, season):
   else:
     return oc
 #########################################################################################
-# This function is for pulling CMT Full Episodes from sections on the main and show page
-# NEED TO DECIDE IF WE WANT TO USE THIS FOR CMT MOST POPULAR OR THE NEW VH1 PULL  ?q=%s
+# This function is for pulling search results
 @route(PREFIX + '/searchvideos')
 def SearchVideos(title, query='', page_url=''):
   oc = ObjectContainer(title2=title)
@@ -197,8 +200,7 @@ def SearchVideos(title, query='', page_url=''):
     local_url = SEARCH_URL + '?q=' + String.Quote(query, usePlus = False)  + '&page=1'
   else:
     local_url = SEARCH_URL + page_url
-  #data = HTML.ElementFromURL(local_url)
-  data = HTML.ElementFromURL(local_url, cacheTime=CACHE_1HOUR)
+  data = HTML.ElementFromURL(local_url)
   for item in data.xpath('//ul/li[contains(@class,"mtvn-video ")]'):
     link = item.xpath('./div/a//@href')[0]
     if 'mtviggy' in link:
@@ -255,31 +257,17 @@ def SearchVideos(title, query='', page_url=''):
     return ObjectContainer(header="Sorry!", message="No video available in this category.")
   else:
     return oc
-###########################################################################################
-# This function is used in CreateShowSeasons and ShowVideo to pull episode numbers for shows that have '--' in episode field
-@route(PREFIX + '/episodefind')
-def EpisodeFind(other_info):
-  try:
-    # A couple of shows do not have an episode number but do have the episode number in other info in the format of Ep. or Episode 
-    episode = int(RE_EPISODE.search(other_info).group(1))
-  except:
-    try:
-      episode = int(RE_EPISODE_ALSO.search(other_info).group(1))
-    except:
-      episode = 0
-  #Log('the value of episode at the end of the EpisodeFind function is %s' %episode)
-  return episode
 #############################################################################################################################
 # This is a function to pull the thumb image from a page. 
-# We first try the top of the page if it isn't there, we can pull an image from the video page side block
+# We first try the first marquee image if it isn't there, we can pull an image from the top of the page
 @route(PREFIX + '/gethumb')
 def GetThumb(url, fallback):
-  # NEED TO BE AWARE OF OTHER PULLS TO THIS URL AND MAKE SURE THEY ARE ALL THE SAME CACHE
+  # NEED TO BE AWARE THESE URLS PULLS ARE FOR SHOW PAGES AND THEY ARE USED BY OTHER FUNCTIONS ABOVE
   try:
-    thumb = HTML.ElementFromURL(url, cacheTime = CACHE_1HOUR).xpath('//a[@class="marquee_img"]/img//@src')[0]
+    thumb = HTML.ElementFromURL(url).xpath('//a[@class="marquee_img"]/img//@src')[0]
   except:
     try:
-      thumb = HTML.ElementFromURL(url, cacheTime = CACHE_1HOUR).xpath("//head//meta[@property='og:image']//@content")[0]
+      thumb = HTML.ElementFromURL(url).xpath("//head//meta[@property='og:image']//@content")[0]
     except:
       thumb = None
   if thumb:
