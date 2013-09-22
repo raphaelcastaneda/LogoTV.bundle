@@ -25,7 +25,7 @@ def Start():
   VideoClipObject.art = R(ART)
 
   # Since all functions would use a pull cache of one hour, just extablishing that here instead
-  #HTTP.CacheTime = CACHE_1HOUR 
+  HTTP.CacheTime = CACHE_1HOUR 
  
 #####################################################################################
 @handler(PREFIX, TITLE, art=ART, thumb=ICON)
