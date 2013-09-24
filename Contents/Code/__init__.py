@@ -53,7 +53,8 @@ def LogoShows(title):
 @route(PREFIX + '/logovideos')
 def LogoVideos(title):
   oc = ObjectContainer(title2=title)
-  oc.add(DirectoryObject(key=Callback(VideoCarousel, title='Featured Videos', url=SHOWS), title='Featured Videos'))
+  # Removed until able to fix issues. Need to add ?vid= to URL pattern and look at those that go to show page
+  #oc.add(DirectoryObject(key=Callback(ProduceMarquee, title='Featured Videos', url=BASE_URL), title='Featured Videos'))
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Episodes', show_type='full-episodes', url=VIDEOS), title='Full Episodes')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Length Movies', show_type='full-movies', url=VIDEOS), title='Full Length Movies')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Other Series and Specials', show_type='other-series', url=VIDEOS), title='Other Series and Specials')) 
