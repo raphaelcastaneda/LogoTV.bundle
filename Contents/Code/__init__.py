@@ -53,6 +53,7 @@ def LogoShows(title):
 @route(PREFIX + '/logovideos')
 def LogoVideos(title):
   oc = ObjectContainer(title2=title)
+  oc.add(DirectoryObject(key=Callback(VideoCarousel, title='Featured Videos', url=SHOWS), title='Featured Videos'))
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Episodes', show_type='full-episodes', url=VIDEOS), title='Full Episodes')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Length Movies', show_type='full-movies', url=VIDEOS), title='Full Length Movies')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Other Series and Specials', show_type='other-series', url=VIDEOS), title='Other Series and Specials')) 
@@ -132,6 +133,7 @@ def ShowVideosType(title, url):
     full_title='Full Movies'
   else:
     full_title='Full Episodes'
+  oc.add(DirectoryObject(key=Callback(ProduceMarquee, title='Featured Videos', url=url), title='Featured Videos')) 
   oc.add(DirectoryObject(key=Callback(ShowVideos, title=full_title, content_type='Full Episode', url=url), title=full_title)) 
   oc.add(DirectoryObject(key=Callback(ShowVideos, title='Other Videos', content_type='Other', url=url), title='Other Videos')) 
   return oc
@@ -281,17 +283,72 @@ def SearchVideos(title, query='', page_url=''):
 def GetThumb(url, fallback):
   # NEED TO BE AWARE THESE URLS PULLS ARE FOR SHOW PAGES AND THEY ARE USED BY OTHER FUNCTIONS ABOVE
   try:
-    thumb = HTML.ElementFromURL(url).xpath('//a[@class="marquee_img"]/img//@src')[0]
+    thumb = HTML.ElementFromURL(url).xpath('//a[@class="marquee_img"]/img//@src')[0].split('?')[0]
   except:
     try:
-      thumb = HTML.ElementFromURL(url).xpath("//head//meta[@property='og:image']//@content")[0]
+      thumb = HTML.ElementFromURL(url).xpath("//head//meta[@property='og:image']//@content")[0].split('?')[0]
     except:
       thumb = None
   if thumb:
-    if '?' in thumb:
-      thumb = thumb.split('?')[0]
     if not thumb.startswith('http://'):
       thumb = BASE_URL + thumb
     return Redirect(thumb)
   else:
     return Redirect(fallback)
+#########################################################################################
+# This will produce the videos listed in the top image block for each page on vh1
+@route(PREFIX + '/producemarquee')
+def ProduceMarquee(title, url):
+  oc = ObjectContainer(title2=title)
+  #THIS DATA PULL WILL MOST LIKELY NEVER BE UNIQUE AND ALWAYS BE USED ELSEWHERE
+  data = HTML.ElementFromURL(url)
+  for video in data.xpath('//ul/li[@class="marquee_images"]'):
+  #for video in data.xpath('//div[@class="marquee_list_vertical"]'):
+    id = video.xpath('.//@id')[0]
+    try:
+      vid_url = video.xpath('./div/a//@href')[0]
+    except:
+      continue
+    if not vid_url.startswith('http://'):
+      vid_url = BASE_URL + vid_url
+    else:
+      if not vid_url.startswith('http://www.logotv.com'):
+        continue
+    thumb = video.xpath('./div/a/img//@src')[0].split('?')[0]
+    if not thumb.startswith('http://'):
+      thumb = BASE_URL + thumb
+    title = video.xpath('./div/a/img//@alt')[0]
+    # Here we use the id from above to directly access the more detailed hidden title
+    try:
+      summary = data.xpath('//div[@class="marquee_bg"]/div[contains(@id,"%s")]/p//text()' %id)[0]
+    except:
+      summary = ''
+    if '/series.jhtml' in vid_url:
+      oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=url, content_type='Full Episode'), title=title, thumb=thumb))
+    elif URLTest(vid_url):
+      oc.add(VideoClipObject(
+        url = vid_url, 
+        title = title, 
+        thumb = thumb,
+        summary = summary
+        ))
+    else:
+      pass
+
+  if len(oc) < 1:
+    Log ('still no value for objects')
+    return ObjectContainer(header="Empty", message="There are no videos to list right now.")
+  else:
+    return oc
+############################################################################################################################
+# This is to test if there is a Plex URL service for  given url.  
+# Seems to return some RSS feeds as not having a service when they do, so currently unused and needs more testing
+#       if URLTest(url) == "true":
+@route(PREFIX + '/urltest')
+def URLTest(url):
+  url_good = ''
+  if URLService.ServiceIdentifierForURL(url) is not None:
+    url_good = True
+  else:
+    url_good = False
+  return url_good
