@@ -1,3 +1,6 @@
+# VIDEO PLAYLIST IN THE TABLE LIST/SHOW VIDEO FUNCTION ARE IN THE FORM OF #id= ON THE END OF THE URL 
+# THE MARQUEE (REMOVED FOR NOW) AND MORE VIDEOS WITH A SHOW_TYPE OF EXTRA ARE VIDEO PLAYLIST AND OF TYPE '/video/?id=' 
+# SEARCHES AND ALL THAT GO THRU VIDEO PAGE DO NOT HAVE PLAYLIST
 TITLE = 'Logo TV'
 PREFIX = '/video/logotv'
 ART = 'art-default.jpg'
@@ -112,12 +115,18 @@ def MoreVideos(title, url, show_type):
     if 'series' in vid_url:
       oc.add(DirectoryObject(key=Callback(ShowVideosType, title=title, url=vid_url), title = title, thumb = thumb))
     else:
-      date = Datetime.ParseDate(video.xpath('./a/div[@class="addedDate"]//text()')[0])
-      oc.add(VideoClipObject(
-        url = vid_url, 
-        title = title, 
-        thumb = thumb,
-        ))
+      if show_type=='extras' and '?id' in vid_url:
+        vid_id = vid_url.split('?id=')[1]
+        vid_url = PLAYLIST %vid_id
+        # send to videopage function
+        oc.add(DirectoryObject(key=Callback(VideoPage, title=title, url=vid_url), title=title, thumb=thumb))
+      else:
+        date = Datetime.ParseDate(video.xpath('./a/div[@class="addedDate"]//text()')[0])
+        oc.add(VideoClipObject(
+          url = vid_url, 
+          title = title, 
+          thumb = thumb,
+          ))
 
   if len(oc) < 1:
     Log ('still no value for objects')
