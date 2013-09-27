@@ -7,6 +7,7 @@ BASE_URL = 'http://www.logotv.com'
 SHOWS = 'http://www.logotv.com/shows/'
 VIDEOS = 'http://www.logotv.com/video/showall.jhtml'
 SEARCH_URL = 'http://www.logotv.com/search/video/'
+PLAYLIST = 'http://www.logotv.com/global/music/videos/ajax/playlist.jhtml?feo_switch=true&channelId=1&id=%s'
 
 RE_EPISODE  = Regex('Episode (\d{1,3}).+')
 RE_EP_AND_SEASON  = Regex('Episode (\d{1,3}), Season (\d{1,2}).+')
@@ -53,8 +54,6 @@ def LogoShows(title):
 @route(PREFIX + '/logovideos')
 def LogoVideos(title):
   oc = ObjectContainer(title2=title)
-  # Removed until able to fix issues. Need to add ?vid= to URL pattern and look at those that go to show page
-  #oc.add(DirectoryObject(key=Callback(ProduceMarquee, title='Featured Videos', url=BASE_URL), title='Featured Videos'))
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Episodes', show_type='full-episodes', url=VIDEOS), title='Full Episodes')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Full Length Movies', show_type='full-movies', url=VIDEOS), title='Full Length Movies')) 
   oc.add(DirectoryObject(key=Callback(MoreVideos, title='Other Series and Specials', show_type='other-series', url=VIDEOS), title='Other Series and Specials')) 
@@ -134,7 +133,6 @@ def ShowVideosType(title, url):
     full_title='Full Movies'
   else:
     full_title='Full Episodes'
-  oc.add(DirectoryObject(key=Callback(ProduceMarquee, title='Featured Videos', url=url), title='Featured Videos')) 
   oc.add(DirectoryObject(key=Callback(ShowVideos, title=full_title, content_type='Full Episode', url=url), title=full_title)) 
   oc.add(DirectoryObject(key=Callback(ShowVideos, title='Other Videos', content_type='Other', url=url), title='Other Videos')) 
   return oc
@@ -158,7 +156,6 @@ def ShowVideos(title, url, content_type):
     thumb = video.xpath('./meta[@itemprop="thumbnail"]//@content')[0].split('?')[0]
     if not thumb.startswith('http://'):
       thumb = BASE_URL + thumb
-    #thumb = thumb.split('?')[0]
     vid_url = video.xpath('./meta[@itemprop="url"]//@content')[0]
     if not vid_url.startswith('http://'):
       vid_url = BASE_URL + vid_url
@@ -197,15 +194,23 @@ def ShowVideos(title, url, content_type):
           episode = 0
 
       if content_type == content:
-        oc.add(EpisodeObject(
-          url = vid_url, 
-          season = season,
-          index = episode,
-          title = title, 
-          thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
-          originally_available_at = date,
-          summary = desc
-        ))
+      # Since video clip playlist are of varying size and impossible to determine parts in URL service, have to do so in code
+      # Many of Logos other videos are playlist with as many as 30 videos, so check for it and produce full list here
+        if content_type == 'Other' and '#id=' in vid_url:
+          vid_id = vid_url.split('#id=')[1]
+          vid_url = PLAYLIST %vid_id
+          # send to videopage function
+          oc.add(DirectoryObject(key=Callback(VideoPage, title=title, url=vid_url), title=title, thumb=thumb))
+        else:
+          oc.add(EpisodeObject(
+            url = vid_url, 
+            season = season,
+            index = episode,
+            title = title, 
+            thumb = Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON),
+            originally_available_at = date,
+            summary = desc
+          ))
   #oc.objects.sort(key = lambda obj: obj.originally_available_at, reverse=True)
 
   if len(oc) < 1:
@@ -296,51 +301,6 @@ def GetThumb(url, fallback):
     return Redirect(thumb)
   else:
     return Redirect(fallback)
-#########################################################################################
-# This will produce the videos listed in the top image block for each page on vh1
-@route(PREFIX + '/producemarquee')
-def ProduceMarquee(title, url):
-  oc = ObjectContainer(title2=title)
-  #THIS DATA PULL WILL MOST LIKELY NEVER BE UNIQUE AND ALWAYS BE USED ELSEWHERE
-  data = HTML.ElementFromURL(url)
-  for video in data.xpath('//ul/li[@class="marquee_images"]'):
-  #for video in data.xpath('//div[@class="marquee_list_vertical"]'):
-    id = video.xpath('.//@id')[0]
-    try:
-      vid_url = video.xpath('./div/a//@href')[0]
-    except:
-      continue
-    if not vid_url.startswith('http://'):
-      vid_url = BASE_URL + vid_url
-    else:
-      if not vid_url.startswith('http://www.logotv.com'):
-        continue
-    thumb = video.xpath('./div/a/img//@src')[0].split('?')[0]
-    if not thumb.startswith('http://'):
-      thumb = BASE_URL + thumb
-    title = video.xpath('./div/a/img//@alt')[0]
-    # Here we use the id from above to directly access the more detailed hidden title
-    try:
-      summary = data.xpath('//div[@class="marquee_bg"]/div[contains(@id,"%s")]/p//text()' %id)[0]
-    except:
-      summary = ''
-    if '/series.jhtml' in vid_url:
-      oc.add(DirectoryObject(key=Callback(ShowVideos, title=title, url=url, content_type='Full Episode'), title=title, thumb=thumb))
-    elif URLTest(vid_url):
-      oc.add(VideoClipObject(
-        url = vid_url, 
-        title = title, 
-        thumb = thumb,
-        summary = summary
-        ))
-    else:
-      pass
-
-  if len(oc) < 1:
-    Log ('still no value for objects')
-    return ObjectContainer(header="Empty", message="There are no videos to list right now.")
-  else:
-    return oc
 ############################################################################################################################
 # This is to test if there is a Plex URL service for  given url.  
 # Seems to return some RSS feeds as not having a service when they do, so currently unused and needs more testing
@@ -353,3 +313,47 @@ def URLTest(url):
   else:
     url_good = False
   return url_good
+####################################################################################################
+# This produces videos for the ajax and global module pages
+@route(PREFIX + '/videopage', page=int)
+def VideoPage(url, title, page=1):
+  oc = ObjectContainer(title2=title)
+  if '?' in url:
+    local_url = url + '&page=' + str(page)
+  else:
+    local_url = url + '?page=' + str(page)
+  # THIS IS A UNIQUE DATA PULL
+  data = HTML.ElementFromURL(local_url)
+  for item in data.xpath('//ol/li[@itemtype="http://schema.org/VideoObject"]'):
+    link = item.xpath('./div/a//@href')[0]
+    if not link.startswith('http://'):
+      link = BASE_URL + link
+    image = item.xpath('./div/a/img//@src')[0]
+    if not image.startswith('http://'):
+      image = BASE_URL + image
+    if '70x53' in image:
+      image = image.replace('70x53', '140x105.jpg')
+    video_title = item.xpath('./div/meta[@itemprop="name"]//@content')[0].strip()
+    video_title = video_title.replace('\n', '')
+    if video_title == None or len(video_title) == 0:
+      video_title = item.xpath('div/a/img')[-1].get('alt')
+    try:
+      date = item.xpath('./p/span/time[@itemprop="datePublished"]//text()')[0]
+    except:
+      date = ''
+    if 'hrs ago' in date:
+      try:
+        date = Datetime.Now()
+      except:
+        date = ''
+    else:
+      date = Datetime.ParseDate(date)
+
+    oc.add(VideoClipObject(url=link, title=video_title, originally_available_at=date, thumb=Resource.ContentsOfURLWithFallback(url=image, fallback=ICON)))
+
+  #oc.objects.sort(key = lambda obj: obj.index, reverse=True)
+
+  if len(oc)==0:
+    return ObjectContainer(header="Sorry!", message="No video available in this category.")
+  else:
+    return oc
