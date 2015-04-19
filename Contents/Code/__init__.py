@@ -213,6 +213,7 @@ def ShowSeasons(title, url, thumb=''):
     local_url = url + 'video/'
     html = HTML.ElementFromURL(local_url, cacheTime = CACHE_1HOUR)
     new_season_list = html.xpath('//span[@id="season-dropdown"]//li/a')
+    thumb = BASE_URL + html.xpath('//meta[@name="thumbnail"]/@content')[0]
     if len(new_season_list)> 0:
         for section in new_season_list:
             title = section.xpath('./span//text()')[0].strip().title()
@@ -288,11 +289,6 @@ def ShowVideos(title, url, season=0):
             date = Datetime.ParseDate(video.xpath('./@data-sort')[0])
             try: episode = int(RE_EXX.search(seas_ep).group(1))
             except: episode = None
-            # This creates a url for playlists of video clips
-            if '#id=' in url:
-                id_num = RE_VIDID.search(vid_url).group(1)
-                new_url = BUILD_URL + id_num
-                vid_url = new_url
 
             oc.add(EpisodeObject(
                 url = vid_url, 
