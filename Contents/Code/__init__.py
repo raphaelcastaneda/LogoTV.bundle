@@ -213,7 +213,8 @@ def ShowSeasons(title, url, thumb=''):
     local_url = url + 'video/'
     html = HTML.ElementFromURL(local_url, cacheTime = CACHE_1HOUR)
     new_season_list = html.xpath('//span[@id="season-dropdown"]//li/a')
-    thumb = BASE_URL + html.xpath('//meta[@name="thumbnail"]/@content')[0]
+    try: thumb = BASE_URL + html.xpath('//meta[@name="thumbnail"]/@content')[0]
+    except: thumb = R(ICON)
     if len(new_season_list)> 0:
         for section in new_season_list:
             title = section.xpath('./span//text()')[0].strip().title()
