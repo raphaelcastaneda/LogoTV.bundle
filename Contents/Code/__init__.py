@@ -187,8 +187,10 @@ def ShowSections(title, url, season=0, season_id='', thumb=''):
         except:
             oc.add(DirectoryObject(key=Callback(ShowOldVideos, title="All Videos", url=url), title="All Videos", thumb=Resource.ContentsOfURLWithFallback(url=thumb, fallback=ICON)))
     if not bad_url:
-        try: season_id = html.xpath('//span[@id="season-dropdown"]//li[@class="active"]/a/@data-id')[0]
-        except: season_id = None
+        # if this is the first time thru then try to get the season id
+        if season==0:
+            try: season_id = html.xpath('//span[@id="season-dropdown"]//li[@class="active"]/a/@data-id')[0]
+            except: season_id = None
         section_list = html.xpath('//span[@id="video-filters-dropdown"]//li/a')
         for section in section_list:
             section_url = section.xpath('./@href')[0]
