@@ -41,6 +41,9 @@ def AllMenu(title, url):
     
     oc = ObjectContainer()
     feed_list = GetJSONFeeds(url)
+    if not feed_list:
+        return ObjectContainer(header="Incompatible", message="Unable to find feeds for %s." %url)
+
     for (title, feed_url, feed_type) in feed_list:
         if feed_type=='shows':
             oc.add(DirectoryObject(key=Callback(ProduceShows, title=title, url=feed_url), title=title))
@@ -110,25 +113,28 @@ def ShowSections(title, url, thumb=''):
     # Get the full episode and video clip feeds 
     for (section_title, section) in SECTION_LIST:
         feed_url = GetJSONFeeds(url + section, section_title)
-        json = JSON.ObjectFromURL(feed_url)
-        videos = json['result']['items']
-        try: filters = json['result']['filters']
-        except: filters = []
-        if videos:
-            # Check the length of filters to see if it needs to go to the VideoSections() function
-            # Full Episodes are not returned, since it is a shorter list of All Episodes, so those must have more than 2 filters
-            if ('Episode' in section_title and len(filters)>2) or ('Video' in section_title and len(filters)>1):
-                oc.add(DirectoryObject(
-                    key=Callback(VideoSections, title=section_title, url=feed_url, thumb=thumb),
-                    title=section_title,
-                    thumb = Resource.ContentsOfURLWithFallback(url=thumb)
-                ))
-            else:
-                oc.add(DirectoryObject(
-                    key=Callback(ShowVideos, title=section_title, url=feed_url),
-                    title=section_title,
-                    thumb = Resource.ContentsOfURLWithFallback(url=thumb)
-                ))
+        if feed_url:
+            json = JSON.ObjectFromURL(feed_url)
+            videos = json['result']['items']
+            try: filters = json['result']['filters']
+            except: filters = []
+            if videos:
+                # Check the length of filters to see if it needs to go to the VideoSections() function
+                # Full Episodes are not returned, since it is a shorter list of All Episodes, so those must have more than 2 filters
+                if ('Episode' in section_title and len(filters)>2) or ('Video' in section_title and len(filters)>1):
+                    oc.add(DirectoryObject(
+                        key=Callback(VideoSections, title=section_title, url=feed_url, thumb=thumb),
+                        title=section_title,
+                        thumb = Resource.ContentsOfURLWithFallback(url=thumb)
+                    ))
+                else:
+                    oc.add(DirectoryObject(
+                        key=Callback(ShowVideos, title=section_title, url=feed_url),
+                        title=section_title,
+                        thumb = Resource.ContentsOfURLWithFallback(url=thumb)
+                    ))
+        else:
+            Log('This section url is incompatible - %s' %(url + section))
 
     if len(oc) < 1:
         Log ('still no value for objects')
@@ -148,7 +154,7 @@ def VideoSections(title, url, thumb=''):
         feed_url = GetJSONFeeds(url, title)
 
     if not feed_url:
-        return ObjectContainer(header="Uncompatible", message="Unable to find feed for %s." %title)
+        return ObjectContainer(header="Incompatible", message="Unable to find feed for %s." %url)
         
     json = JSON.ObjectFromURL(feed_url)
     
@@ -310,5 +316,9 @@ def GetJSONFeeds(url, title=''):
                             feed_list.append(json_info)
                             break
 
-    #Log('the value of feed_list is %s' %feed_list)
-    return feed_list
+    if title:
+        #Log('the value of json_feed is %s' %json_feed)
+        return json_feed
+    else:
+        #Log('the value of feed_list is %s' %feed_list)
+        return feed_list
