@@ -21,14 +21,14 @@ def Start():
     EpisodeObject.thumb = R(ICON)
     VideoClipObject.thumb = R(ICON)
 
-    HTTP.CacheTime = CACHE_1HOUR 
+    HTTP.CacheTime = CACHE_1HOUR
     HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
- 
+
 #####################################################################################
 @handler(PREFIX, TITLE, art=ART, thumb=ICON)
 def MainMenu():
     oc = ObjectContainer()
-    
+
     oc.add(DirectoryObject(key=Callback(AllMenu, title='Shows', url=BASE_URL+'/shows'), title='Shows'))
     oc.add(DirectoryObject(key=Callback(VideoSections, title='Full Episodes', url=BASE_URL+'/full-episodes'), title='Full Episodes'))
     oc.add(DirectoryObject(key=Callback(ShowVideos, title='Most Viewed Videos', url=MOSTVIEWED), title='Most Viewed Videos'))
@@ -38,7 +38,7 @@ def MainMenu():
 # This function will only return those with a title for the feed and items or shows
 @route(PREFIX + '/allmenu')
 def AllMenu(title, url):
-    
+
     oc = ObjectContainer()
     feed_list = GetJSONFeeds(url)
     if not feed_list:
@@ -56,7 +56,7 @@ def AllMenu(title, url):
 # This includes the Featured and A to Z from show main page
 @route(PREFIX + '/produceshows')
 def ProduceShows(title, url, alpha=''):
-    
+
     oc = ObjectContainer(title2=title)
     json = JSON.ObjectFromURL(url)
 
@@ -67,7 +67,7 @@ def ProduceShows(title, url, alpha=''):
         except:
             try: show_list = json['result']['shows']
             # Add an exception here in case there are no show results
-            except: return ObjectContainer(header="Empty", message="This page is not in the proper format to return shows." ) 
+            except: return ObjectContainer(header="Empty", message="This page is not in the proper format to return shows." )
     else:
         show_list = json['result']['shows'][alpha]
 
@@ -84,7 +84,7 @@ def ProduceShows(title, url, alpha=''):
                 title=title,
                 thumb = Resource.ContentsOfURLWithFallback(url=thumb)
             ))
-    
+
     else:
         for alpha in json['result']['shows']:
             if alpha=='hash':
@@ -105,12 +105,12 @@ def ProduceShows(title, url, alpha=''):
 # This function produces video clip and full episode sections for shows
 @route(PREFIX + '/showsections')
 def ShowSections(title, url, thumb=''):
-    
+
     oc = ObjectContainer(title2=title)
     if not thumb:
         try: thumb = HTML.ElementFromURL(url, cacheTime = CACHE_1DAY).xpath('//meta[@property="og:image"]/@content')[0].strip()
         except: thumb = ''
-    # Get the full episode and video clip feeds 
+    # Get the full episode and video clip feeds
     for (section_title, section) in SECTION_LIST:
         feed_url = GetJSONFeeds(url + section, section_title)
         if feed_url:
@@ -146,7 +146,7 @@ def ShowSections(title, url, thumb=''):
 # For shows it is a pull down for seasons but other pages may list other options like a list of show full episode pages
 @route(PREFIX + '/videosections')
 def VideoSections(title, url, thumb=''):
-    
+
     oc = ObjectContainer(title2=title)
     if '/feeds/ent_'in url:
         feed_url = url
@@ -155,9 +155,9 @@ def VideoSections(title, url, thumb=''):
 
     if not feed_url:
         return ObjectContainer(header="Incompatible", message="Unable to find feed for %s." %url)
-        
+
     json = JSON.ObjectFromURL(feed_url)
-    
+
     # Find pull-down sections
     try: pulldown_list = json['result']['filters']
     except:
@@ -170,7 +170,7 @@ def VideoSections(title, url, thumb=''):
         # Check for a show pull down list instead of filters
         try: pulldown_list = json['result']['shows']
         except: pulldown_list = []
-        
+
     for vid_type in pulldown_list:
         try:
             type_title = vid_type['name']
@@ -203,11 +203,11 @@ def ShowVideos(title, url):
         except:
             try: videos = json['result']['playlist']['videos']
             except: return ObjectContainer(header="Empty", message="There are no videos to list right now.")
-    
+
     for video in videos:
         # VIDEOS ARE ALL UNLOCKED
         vid_url = video['url']
-        # Found a couple urls where with '/episodes/' that are not in URL pattern, so skip them 
+        # Found a couple urls where with '/episodes/' that are not in URL pattern, so skip them
         if vid_url.startswith(BASE_URL + '/episodes/'):
             continue
         try: thumb=video['images'][0]['url']
@@ -223,7 +223,7 @@ def ShowVideos(title, url):
         except:
             try: unix_date = video['publishDate']
             except: unix_date = None
-        if unix_date:            
+        if unix_date:
             date = Datetime.FromTimestamp(float(unix_date)).strftime('%m/%d/%Y')
             date = Datetime.ParseDate(date)
         else:
@@ -234,18 +234,18 @@ def ShowVideos(title, url):
             duration = 0
         if not isinstance(duration, int):
             if '.' in duration:
-               duration = duration.split('.')[0] 
+               duration = duration.split('.')[0]
             try: duration = int(duration)
             except: duration = 0
         duration = duration * 1000
 
         if show:
             oc.add(EpisodeObject(
-                url = vid_url, 
+                url = vid_url,
                 show = show,
                 season = season,
                 index = episode,
-                title = video['title'], 
+                title = video['title'],
                 thumb = Resource.ContentsOfURLWithFallback(url=thumb ),
                 originally_available_at = date,
                 duration = duration,
@@ -253,14 +253,14 @@ def ShowVideos(title, url):
             ))
         else:
             oc.add(VideoClipObject(
-                url = vid_url, 
-                title = video['title'], 
+                url = vid_url,
+                title = video['title'],
                 thumb = Resource.ContentsOfURLWithFallback(url=thumb ),
                 originally_available_at = date,
                 duration = duration,
                 summary = video['description']
             ))
-      
+
     try: next_page = json['result']['nextPageURL']
     except: next_page = None
     if next_page:
@@ -268,7 +268,7 @@ def ShowVideos(title, url):
             key = Callback(ShowVideos, title=title, url=next_page),
             title = L("Next Page ...")
         ))
-      
+
     if len(oc) < 1:
         Log ('still no value for objects')
         return ObjectContainer(header="Empty", message="There are no unlocked videos available to watch." )
@@ -278,7 +278,7 @@ def ShowVideos(title, url):
 # Function to pull all the zone feed urls and titles except header and footer and those without a title
 @route(PREFIX + '/getjsonfeeds')
 def GetJSONFeeds(url, title=''):
-    
+
     json_feed = ''
     feed_list = []
     try: zone_list = JSON.ObjectFromURL(MANIFEST_URL %url, cacheTime = CACHE_1DAY)['manifest']['zones']
@@ -288,7 +288,7 @@ def GetJSONFeeds(url, title=''):
             manifest_data = RE_MANIFEST.search(content).group(1)
             zone_list = JSON.ObjectFromString(manifest_data)['manifest']['zones']
         except: zone_list = []
-    
+
     for zone in zone_list:
         if zone not in SKIP_ZONES:
             json_feed = zone_list[zone]['feed']
@@ -303,8 +303,8 @@ def GetJSONFeeds(url, title=''):
                 feed_name = feed_name.title()
                 if title:
                     if title in feed_name:
-                        #Log('the value of json_feed is %s' %json_feed)  
-                        return json_feed    
+                        Log('the value of json_feed is %s' %json_feed)
+                        return json_feed
                         break
                 else:
                     type_list = ['items', 'episodes', 'playlist', 'shows']
@@ -317,8 +317,8 @@ def GetJSONFeeds(url, title=''):
                             break
 
     if title:
-        #Log('the value of json_feed is %s' %json_feed)
+        Log('the value of json_feed is %s' %json_feed)
         return json_feed
     else:
-        #Log('the value of feed_list is %s' %feed_list)
+        Log('the value of feed_list is %s' %feed_list)
         return feed_list
