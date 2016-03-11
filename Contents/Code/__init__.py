@@ -325,7 +325,7 @@ def GetJSONFeeds(url, title=''):
 
 def findEpisodePlayer(pageUrl):
     Log("pageUrl: " + pageUrl)
-    req = HTTP.Request(pageUrl, values=None, headers={}, cacheTime=CACHE_INTERVAL, encoding=None, errors=None, timeout=5000, immediate=False, sleep=0, data=None)
+    req = HTTP.Request(pageUrl, values=None, headers={}, encoding=None, errors=None, timeout=5000, immediate=False, sleep=0, data=None)
     #Log("content: " + req.content)
     content = req.content
     mgid = re.search('mgid:arc:episode[^"]+', content).group(0)
