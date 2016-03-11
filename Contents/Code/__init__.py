@@ -1,3 +1,6 @@
+import re
+import urllib
+
 TITLE = 'Logo TV'
 PREFIX = '/video/logotv'
 ART = 'art-default.jpg'
