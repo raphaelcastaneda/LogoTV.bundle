@@ -206,7 +206,7 @@ def ShowVideos(title, url):
 
     for video in videos:
         # VIDEOS ARE ALL UNLOCKED
-        vid_url = video['url']
+        vid_url = findEpisodePlayer(video['url'])
         # Found a couple urls where with '/episodes/' that are not in URL pattern, so skip them
         if vid_url.startswith(BASE_URL + '/episodes/'):
             continue
@@ -322,3 +322,15 @@ def GetJSONFeeds(url, title=''):
     else:
         Log('the value of feed_list is %s' %feed_list)
         return feed_list
+
+def findEpisodePlayer(pageUrl):
+    Log("pageUrl: " + pageUrl)
+    req = HTTP.Request(pageUrl, values=None, headers={}, cacheTime=CACHE_INTERVAL, encoding=None, errors=None, timeout=5000, immediate=False, sleep=0, data=None)
+    #Log("content: " + req.content)
+    content = req.content
+    mgid = re.search('mgid:arc:episode[^"]+', content).group(0)
+    config_url = 'http://media.mtvnservices.com/pmt-arc/e1/players/mgid:arc:episode:logotv.com:/context1/context2/context7/config.xml?uri={0}&type=network&ref=www.logotv.com&geo=US&group=music&network=cable&device=Other&networkConnectionType=None'.format(mgid)
+    config_url = urllib.quote(config_url)
+    flash_link = 'http://media.mtvnservices.com/player/prime/mediaplayerprime.2.10.16.swf?uri={0}&type=network&ref=www.logotv.com&geo=US&group=music&network=cable&device=Other&networkConnectionType=None&CONFIG_URL={1}'.format(mgid, config_url)
+    Log("flash link: " + flash_link)
+    return flash_link
